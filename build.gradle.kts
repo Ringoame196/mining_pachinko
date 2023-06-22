@@ -33,7 +33,7 @@ dependencies {
 }
 
 configure<BukkitPluginDescription> {
-    main = "@group@.Main"
+    main = "com.github.Ringoame196.Main"
     version = gitVersion()
     apiVersion = "1." + pluginVersion.split(".")[1]
 }
@@ -41,9 +41,9 @@ configure<BukkitPluginDescription> {
 tasks.withType<ShadowJar> {
     configurations = listOf(shadowImplementation)
     archiveClassifier.set("")
-    relocate("kotlin", "@group@.libs.kotlin")
-    relocate("org.intellij.lang.annotations", "@group@.libs.org.intellij.lang.annotations")
-    relocate("org.jetbrains.annotations", "@group@.libs.org.jetbrains.annotations")
+    relocate("kotlin", "com.github.Ringoame196.libs.kotlin")
+    relocate("org.intellij.lang.annotations", "com.github.Ringoame196.libs.org.intellij.lang.annotations")
+    relocate("org.jetbrains.annotations", "com.github.Ringoame196.libs.org.jetbrains.annotations")
 }
 
 tasks.named("build") {
