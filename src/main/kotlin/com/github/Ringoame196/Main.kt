@@ -1,7 +1,9 @@
 package com.github.Ringoame196
 
+import net.md_5.bungee.api.chat.ClickEvent.Action
 import net.md_5.bungee.api.chat.ComponentBuilder
 import org.bukkit.ChatColor
+import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.Particle
 import org.bukkit.Sound
@@ -10,6 +12,7 @@ import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.block.BlockBreakEvent
+import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.Damageable
 import org.bukkit.plugin.java.JavaPlugin
@@ -17,11 +20,20 @@ import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
 import org.bukkit.scheduler.BukkitRunnable
 import java.util.*
+import kotlin.collections.HashMap
 
 class Main : JavaPlugin(), Listener {
     override fun onEnable() { // 読み込み時
         server.pluginManager.registerEvents(this, this)
+        //下のブロックのためのリスト作成
+        blockBelow_list.add(Material.BEDROCK)
+        blockBelow_list.add(Material.REDSTONE_BLOCK)
+        blockBelow_list.add(Material.EMERALD_BLOCK)
     }
+    val break_countlist: MutableMap<Location, Int> = HashMap()
+    val plugin = this
+    // List使えば見やすい？
+    val blockBelow_list: MutableList<Material> = mutableListOf()
 
     fun nohavepicaxe(player: Player) {
         // 専用ピッケルじゃないときの処理まとめ
@@ -49,6 +61,9 @@ class Main : JavaPlugin(), Listener {
         meta?.let {
             it.setDisplayName(ChatColor.GOLD.toString() + "ラッキーエメラルド")
             hit_emerald.setItemMeta(it)
+
+            val blockLocation = block.location
+            break_countlist[blockLocation] = 0
         }
 
         player.spawnParticle(Particle.EXPLOSION_LARGE, block.getLocation(), 100, 0.5, 0.5, 0.5, 0.1)
@@ -61,7 +76,6 @@ class Main : JavaPlugin(), Listener {
         block.setType(Material.BEDROCK)
         player.addPotionEffect(PotionEffect(PotionEffectType.BLINDNESS, 20, 255))
 
-        val plugin = this
         object : BukkitRunnable() {
             var count = 0
             var switching = true
@@ -104,12 +118,6 @@ class Main : JavaPlugin(), Listener {
 
         val block_type = blockBelow.type
 
-        // List使えば見やすい？
-        val blockBelow_list: MutableList<Material> = mutableListOf()
-        blockBelow_list.add(Material.BEDROCK)
-        blockBelow_list.add(Material.REDSTONE_BLOCK)
-        blockBelow_list.add(Material.EMERALD_BLOCK)
-
         // 下のブロックが指定したもの以外だったら停止
         if (!blockBelow_list.contains(block_type)) {
             return
@@ -135,7 +143,13 @@ class Main : JavaPlugin(), Listener {
         // 専用ピッケルで破壊したときに音を鳴らす
         player.playSound(player, Sound.BLOCK_NOTE_BLOCK_BELL, 1.0f, 1.0f)
 
+        val blockLocation = block.location
+
         if (block_type == Material.BEDROCK) { // 通常時
+
+            // 確率
+            val currentValue = break_countlist.getOrDefault(blockLocation, 0)
+            break_countlist[blockLocation] = currentValue + 1
 
             // 抽選
             val emerald_lottery = random.nextInt(120) == 1
@@ -197,5 +211,20 @@ class Main : JavaPlugin(), Listener {
             }
             blockBelow.setType(Material.BEDROCK)
         }
+    }
+    @EventHandler
+    fun onPlayerInteractEvent(e: PlayerInteractEvent) {
+        //ブロックをクリックしたときの処理
+        val player = e.player
+        val block = e.clickedBlock
+        val blockBelow = block?.location?.subtract(0.0, 1.0, 0.0)?.block
+
+        val clickedPlayers: MutableSet<Player> = mutableSetOf()
+        if (clickedPlayers.contains(player)) { return }
+        if (block?.type != Material.EMERALD_ORE) { return }
+        if (e.action == org.bukkit.event.block.Action.LEFT_CLICK_BLOCK) { return }
+        if (!blockBelow_list.contains(blockBelow?.type)) { return }
+        val break_count = break_countlist[block.getLocation()] ?: 0
+        player.sendTitle("", ChatColor.GOLD.toString() + "連続" + break_count.toString() + "回ハズレ", 20, 20, 20)
     }
 }
