@@ -38,11 +38,11 @@ class Main : JavaPlugin(), Listener {
         player.sendMessage(ChatColor.RED.toString() + "専用ピッケルを購入してください")
 
         if (!player.isOp) { return }
-        val clickableText = ComponentBuilder(ChatColor.AQUA.toString() + "[GET]" + ChatColor.RED.toString() + "※OPメニュー")
+        val clickableText = ComponentBuilder(ChatColor.AQUA.toString() + "[GET]" + ChatColor.YELLOW.toString() + "※OP専用メニュー")
             .event(
                 net.md_5.bungee.api.chat.ClickEvent(
                     net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND,
-                    "/give @s iron_pickaxe{display:{Name:\"{\\\"text\\\":\\\"採掘パチンコ\\\",\\\"color\\\":\\\"gold\\\"}\",Lore:[\"採掘パチンコ用で使うピッケル\"]},CanDestroy:[\"minecraft:emerald_ore\"]}"
+                    "/give @s iron_pickaxe{display:{Name:\"{\\\"text\\\":\\\"採掘パチンコ(1号機)\\\",\\\"color\\\":\\\"gold\\\"}\",Lore:[\"採掘パチンコ用で使うピッケル\"]},CanDestroy:[\"minecraft:emerald_ore\"]}"
                 )
             )
             .create()
@@ -128,7 +128,7 @@ class Main : JavaPlugin(), Listener {
                 nohavepicaxe(player)
                 return
             }
-            if (itemMeta.displayName != ChatColor.GOLD.toString() + "採掘パチンコ") {
+            if (itemMeta.displayName != ChatColor.GOLD.toString() + "採掘パチンコ(1号機)") {
                 nohavepicaxe(player)
                 return
             }
@@ -174,7 +174,7 @@ class Main : JavaPlugin(), Listener {
             if (meta is Damageable) {
                 val damageable = meta
                 var durability = damageable.damage.toShort()
-                durability++
+                durability = (durability + 5).toShort()
                 damageable.damage = durability.toInt()
                 mainhand.setItemMeta(meta)
                 if (durability >= 250) { // 耐久値が0になったらアイテムを消す
@@ -186,6 +186,14 @@ class Main : JavaPlugin(), Listener {
             }
         } else {
             if (blockBelow.type == Material.EMERALD_BLOCK) { // エメラルドブロックの処理
+                staging(
+                    "当たった！！！",
+                    "",
+                    player,
+                    block,
+                    Material.BEDROCK,
+                    null
+                )
                 hit(player, block)
             } else { // レッドストーンブロックの処理
                 val redstone_ranodm = random.nextInt(2) == 1
