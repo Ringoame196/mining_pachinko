@@ -65,5 +65,9 @@ task<LaunchMinecraftServerTask>("buildAndLaunchServer") {
     nogui.set(true)
     agreeEula.set(true)
 }
-
+kotlinter {
+    disabledRules = arrayOf("no-wildcard-imports", "import-ordering")
+}
 task<SetupTask>("setup")
+
+

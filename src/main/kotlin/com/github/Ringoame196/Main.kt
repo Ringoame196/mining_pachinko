@@ -1,23 +1,94 @@
 package com.github.Ringoame196
 
 import net.md_5.bungee.api.chat.ComponentBuilder
-import org.bukkit.Bukkit
 import org.bukkit.ChatColor
 import org.bukkit.Material
+import org.bukkit.Particle
 import org.bukkit.Sound
+import org.bukkit.block.Block
+import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.meta.Damageable
 import org.bukkit.plugin.java.JavaPlugin
+import org.bukkit.potion.PotionEffect
+import org.bukkit.potion.PotionEffectType
+import org.bukkit.scheduler.BukkitRunnable
 import java.util.*
 
-
 class Main : JavaPlugin(), Listener {
-    override fun onEnable() {
+    override fun onEnable() { // 読み込み時
         server.pluginManager.registerEvents(this, this)
     }
-    val plugin = this
+
+    fun nohavepicaxe(player: Player) {
+        // 専用ピッケルじゃないときの処理まとめ
+        player.sendMessage(ChatColor.RED.toString() + "専用ピッケルを購入してください")
+
+        if (!player.isOp) {
+            return
+        }
+        val clickableText = ComponentBuilder(ChatColor.AQUA.toString() + "[GET]" + ChatColor.RED.toString() + "※OPメニュー")
+            .event(
+                net.md_5.bungee.api.chat.ClickEvent(
+                    net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND,
+                    "/give @s iron_pickaxe{display:{Name:\"{\\\"text\\\":\\\"採掘パチンコ\\\",\\\"color\\\":\\\"gold\\\"}\",Lore:[\"採掘パチンコ用で使うピッケル\"]},CanDestroy:[\"minecraft:emerald_ore\"]}"
+                )
+            )
+            .create()
+        player.spigot().sendMessage(*clickableText)
+    }
+
+    fun hit(player: Player, block: Block) {
+        // あったときの処理
+        // 当たりのエメラルド
+        val hit_emerald = ItemStack(Material.EMERALD)
+        val meta = hit_emerald.itemMeta
+        meta?.let {
+            it.setDisplayName(ChatColor.GOLD.toString() + "ラッキーエメラルド")
+            hit_emerald.setItemMeta(it)
+        }
+
+        player.spawnParticle(Particle.EXPLOSION_LARGE, block.getLocation(), 100, 0.5, 0.5, 0.5, 0.1)
+        player.inventory.addItem(hit_emerald)
+        player.playSound(player, Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 1.0f)
+    }
+
+    fun staging(title: String, subtitle: String, player: Player, block: Block, set_block: Material, sound: Sound?) {
+        // 演出
+        block.setType(Material.BEDROCK)
+        player.addPotionEffect(PotionEffect(PotionEffectType.BLINDNESS, 20, 255))
+
+        val plugin = this
+        object : BukkitRunnable() {
+            var count = 0
+            var switching = true
+            val blockBelow = block.location.subtract(0.0, 1.0, 0.0).block
+
+            override fun run() {
+                if (count <= 10) {
+                    this.switching = if (switching == true) {
+                        player.sendTitle(title, ChatColor.GREEN.toString() + subtitle, 3, 3, 3)
+                        blockBelow.setType(set_block)
+                        false
+                    } else {
+                        player.sendTitle(ChatColor.YELLOW.toString() + title, subtitle, 3, 3, 3)
+                        blockBelow.setType(Material.BEDROCK)
+                        true
+                    }
+                    sound?.let {
+                        player.playSound(player, sound, 1.0f, 1.0f)
+                    }
+                    count++
+                } else {
+                    block.setType(Material.EMERALD_ORE)
+                    cancel()
+                }
+            }
+        }.runTaskTimer(plugin, 0, 8)
+    }
 
     @EventHandler
     fun onBlockBreak(e: BlockBreakEvent) {
@@ -25,173 +96,106 @@ class Main : JavaPlugin(), Listener {
         val player = e.player
         val blockBelow = block.location.subtract(0.0, 1.0, 0.0).block
         val random = Random()
-
-        val set_blockBellow = Material.BEDROCK
-
         val mainhand = player.inventory.itemInMainHand
 
-        fun nohavepixel() {
-            // 専用ピッケルじゃないときの処理まとめ
-            player.sendMessage(ChatColor.RED.toString() + "専用ピッケルを購入してください")
+        if (block.type != Material.EMERALD_ORE) {
+            return
+        }
 
-            if (player.isOp) {
-                val clickableText = ComponentBuilder(ChatColor.AQUA.toString() + "[GET]" + ChatColor.RED.toString() + "※OPメニュー")
-                    .event(
-                        net.md_5.bungee.api.chat.ClickEvent(
-                            net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND,
-                            "/give @s iron_pickaxe{display:{Name:\"{\\\"text\\\":\\\"採掘パチンコ\\\",\\\"color\\\":\\\"gold\\\"}\",Lore:[\"採掘パチンコ用で使うピッケル\"]}} 1"
-                        )
-                    )
-                    .create()
+        val block_type = blockBelow.type
 
-                player.spigot().sendMessage(*clickableText)
+        // List使えば見やすい？
+        val blockBelow_list: MutableList<Material> = mutableListOf()
+        blockBelow_list.add(Material.BEDROCK)
+        blockBelow_list.add(Material.REDSTONE_BLOCK)
+        blockBelow_list.add(Material.EMERALD_BLOCK)
+
+        // 下のブロックが指定したもの以外だったら停止
+        if (!blockBelow_list.contains(block_type)) {
+            return
+        }
+        e.isCancelled = true
+
+        val itemMeta = mainhand.itemMeta
+        if (itemMeta == null) { // 素手で壊した場合
+            nohavepicaxe(player)
+            return
+        }
+        itemMeta.let {
+            if (mainhand.type != Material.IRON_PICKAXE) {
+                nohavepicaxe(player)
+                return
+            }
+            if (itemMeta.displayName != ChatColor.GOLD.toString() + "採掘パチンコ") {
+                nohavepicaxe(player)
+                return
             }
         }
 
-        // 当たりのエメラルド
-        val hit_emerald = ItemStack(Material.EMERALD)
-        val meta = hit_emerald.itemMeta
-        if (meta != null) {
-            meta.setDisplayName(ChatColor.GOLD.toString() + "ラッキーエメラルド")
-        }
-        hit_emerald.setItemMeta(meta)
+        // 専用ピッケルで破壊したときに音を鳴らす
+        player.playSound(player, Sound.BLOCK_NOTE_BLOCK_BELL, 1.0f, 1.0f)
 
-        if (block.type == Material.EMERALD_ORE) {
-            val block_type = blockBelow.type
-            if (block_type != set_blockBellow && block_type != Material.EMERALD_BLOCK && block_type != Material.REDSTONE_BLOCK) {
-                return
+        if (block_type == Material.BEDROCK) { // 通常時
+
+            // 抽選
+            val emerald_lottery = random.nextInt(120) == 1
+            val redstone_lottery = random.nextInt(60) == 1
+
+            if (emerald_lottery) { // エメラルドブロックが当たったとき
+                staging(
+                    "当たり濃厚！！",
+                    "鉱石を壊せ！！！",
+                    player,
+                    block,
+                    Material.EMERALD_BLOCK,
+                    Sound.ENTITY_EXPERIENCE_ORB_PICKUP
+                )
+            } else if (redstone_lottery) { // レッドストーンブロックが当たったとき
+                player.playSound(player, Sound.ENTITY_WITHER_SPAWN, 1.0f, 1.0f)
+                staging(
+                    "チャンス",
+                    "鉱石を壊せ！！！",
+                    player,
+                    block,
+                    Material.REDSTONE_BLOCK,
+                    null
+                )
             }
-            e.isCancelled = true
-
-            val itemMeta = mainhand.itemMeta
-            if (itemMeta == null) {
-                nohavepixel()
-                return
-            }
-            if (mainhand.type != Material.IRON_PICKAXE || itemMeta.displayName != ChatColor.GOLD.toString() + "採掘パチンコ") {
-                nohavepixel()
-                return
-            }
-
-            player.playSound(player, Sound.BLOCK_NOTE_BLOCK_BELL, 1.0f, 1.0f)
-
-            if (block_type == set_blockBellow) { // 通常時
-                // 抽選
-                val emerald_lottery = random.nextInt(120)
-                val redstone_lottery = random.nextInt(60)
-
-                lateinit var title:String
-                if (emerald_lottery == 1) { // エメラルドブロックが当たったとき
-                    blockBelow.setType(Material.EMERALD_BLOCK)
-                    title = "当たり濃厚！！"
-                } else if (redstone_lottery == 1) { // レッドストーンブロックが当たったとき
-                    blockBelow.setType(Material.REDSTONE_BLOCK)
-                    title = "チャンス"
-                    player.playSound(player, Sound.ENTITY_WITHER_SPAWN, 1.0f, 1.0f)
-                } else {
+            // 耐久値を減らす
+            val meta = mainhand.itemMeta
+            if (meta is Damageable) {
+                val damageable = meta
+                var durability = damageable.damage.toShort()
+                durability++
+                damageable.damage = durability.toInt()
+                mainhand.setItemMeta(meta)
+                if (durability >= 250) { // 耐久値が0になったらアイテムを消す
+                    mainhand.setAmount(0)
+                    player.playSound(player.location, Sound.ENTITY_ITEM_BREAK, 1f, 1f)
+                    player.sendMessage(ChatColor.RED.toString() + "ピッケルが壊れた")
                     return
                 }
-
-                block.setType(Material.BEDROCK)
-                val timer = Timer()
-                timer.scheduleAtFixedRate(
-                    object : TimerTask() {
-                        var count = 0
-                        var switching = 0
-
-                        override fun run() {
-                            if (count <= 10) {
-                                if (switching == 0) {
-                                    Bukkit.getScheduler().runTask(
-                                        plugin,
-                                        Runnable {
-                                            player.sendTitle(ChatColor.YELLOW.toString() + title, " ", 1, 10, 1)
-                                            if (redstone_lottery == 1) {
-                                                blockBelow.setType(Material.REDSTONE_BLOCK)
-                                            }
-                                        }
-                                    )
-                                    switching = 1
-                                } else {
-                                    Bukkit.getScheduler().runTask(
-                                        plugin,
-                                        Runnable {
-                                            player.sendTitle(title, " ", 1, 10, 1)
-                                            if (redstone_lottery == 1) {
-                                                blockBelow.setType(Material.BEDROCK)
-                                            }
-                                        }
-                                    )
-                                    switching = 0
-                                }
-
-                                if (emerald_lottery == 1) {
-                                    Bukkit.getScheduler().runTask(
-                                        plugin,
-                                        Runnable {
-                                            player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f)
-                                        }
-                                    )
-                                }
-
-                                count++
-                            } else {
-                                // タイマーを停止する
-                                timer.cancel()
-
-                                // ブロックの変更操作を同期的に行う
-                                Bukkit.getScheduler().runTask(
-                                    plugin,
-                                    Runnable {
-                                        block.type = Material.EMERALD_ORE
-                                    }
-                                )
-                            }
-                        }
-                    },
-                    10, 300
-                )
-            } else {
-                if (blockBelow.type == Material.EMERALD_BLOCK) { // エメラルドブロックの処理
-                    player.inventory.addItem(hit_emerald)
-                    player.playSound(player, Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 1.0f)
-                } else { // レッドストーンブロックの処理
-                    val redstone_ranodm = random.nextInt(2)
-                    if (redstone_ranodm == 1) {
-                        player.inventory.addItem(hit_emerald)
-
-                        val timer = Timer()
-                        timer.scheduleAtFixedRate(
-                            object : TimerTask() {
-                                var count = 0
-                                var switching = 0
-                                var title = "当たり"
-
-                                override fun run() {
-                                    if (count <= 10) {
-                                        if (switching == 0) {
-                                            player.sendTitle(ChatColor.YELLOW.toString() + title, " ", 1, 10, 1)
-                                            switching = 1
-                                        } else {
-                                            player.sendTitle(title, " ", 1, 10, 1)
-                                            switching = 0
-                                        }
-                                        player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f)
-
-                                        count++
-                                    } else {
-                                        // タイマーを停止する
-                                        timer.cancel()
-                                    }
-                                }
-                            },
-                            10, 300
-                        )
-                    }
-                }
-
-                blockBelow.setType(set_blockBellow)
             }
+        } else {
+            if (blockBelow.type == Material.EMERALD_BLOCK) { // エメラルドブロックの処理
+                hit(player, block)
+            } else { // レッドストーンブロックの処理
+                val redstone_ranodm = random.nextInt(2) == 1
+                if (redstone_ranodm) {
+                    // レッドストーンが1/2であったときの繰り返し処理
+                    if (!redstone_ranodm) { return }
+                    staging(
+                        "当たり！！",
+                        "",
+                        player,
+                        block,
+                        Material.BEDROCK,
+                        Sound.ENTITY_EXPERIENCE_ORB_PICKUP
+                    )
+                    hit(player, block)
+                }
+            }
+            blockBelow.setType(Material.BEDROCK)
         }
     }
 }
