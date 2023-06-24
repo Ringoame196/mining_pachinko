@@ -1,6 +1,5 @@
 package com.github.Ringoame196
 
-import net.md_5.bungee.api.chat.ClickEvent.Action
 import net.md_5.bungee.api.chat.ComponentBuilder
 import org.bukkit.ChatColor
 import org.bukkit.Location
@@ -25,23 +24,20 @@ import kotlin.collections.HashMap
 class Main : JavaPlugin(), Listener {
     override fun onEnable() { // 読み込み時
         server.pluginManager.registerEvents(this, this)
-        //下のブロックのためのリスト作成
+        // 下のブロックのためのリスト作成
         blockBelow_list.add(Material.BEDROCK)
         blockBelow_list.add(Material.REDSTONE_BLOCK)
         blockBelow_list.add(Material.EMERALD_BLOCK)
     }
-    val break_countlist: MutableMap<Location, Int> = HashMap()
     val plugin = this
-    // List使えば見やすい？
-    val blockBelow_list: MutableList<Material> = mutableListOf()
+    val break_countlist: MutableMap<Location, Int> = HashMap() // ブロックごとに変数を保存する
+    val blockBelow_list: MutableList<Material> = mutableListOf() // 下のブロックを管理するためのリスト
 
     fun nohavepicaxe(player: Player) {
         // 専用ピッケルじゃないときの処理まとめ
         player.sendMessage(ChatColor.RED.toString() + "専用ピッケルを購入してください")
 
-        if (!player.isOp) {
-            return
-        }
+        if (!player.isOp) { return }
         val clickableText = ComponentBuilder(ChatColor.AQUA.toString() + "[GET]" + ChatColor.RED.toString() + "※OPメニュー")
             .event(
                 net.md_5.bungee.api.chat.ClickEvent(
@@ -119,9 +115,7 @@ class Main : JavaPlugin(), Listener {
         val block_type = blockBelow.type
 
         // 下のブロックが指定したもの以外だったら停止
-        if (!blockBelow_list.contains(block_type)) {
-            return
-        }
+        if (!blockBelow_list.contains(block_type)) { return }
         e.isCancelled = true
 
         val itemMeta = mainhand.itemMeta
@@ -214,7 +208,7 @@ class Main : JavaPlugin(), Listener {
     }
     @EventHandler
     fun onPlayerInteractEvent(e: PlayerInteractEvent) {
-        //ブロックをクリックしたときの処理
+        // ブロックをクリックしたときの処理
         val player = e.player
         val block = e.clickedBlock
         val blockBelow = block?.location?.subtract(0.0, 1.0, 0.0)?.block
@@ -224,6 +218,7 @@ class Main : JavaPlugin(), Listener {
         if (block?.type != Material.EMERALD_ORE) { return }
         if (e.action == org.bukkit.event.block.Action.LEFT_CLICK_BLOCK) { return }
         if (!blockBelow_list.contains(blockBelow?.type)) { return }
+
         val break_count = break_countlist[block.getLocation()] ?: 0
         player.sendTitle("", ChatColor.GOLD.toString() + "連続" + break_count.toString() + "回ハズレ", 20, 20, 20)
     }
