@@ -1,4 +1,4 @@
-package com.github.Ringoame196
+package com.github.Ringoame196.Listeners
 
 import org.bukkit.Bukkit
 import org.bukkit.ChatColor
@@ -22,10 +22,10 @@ import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
 import org.bukkit.scheduler.BukkitRunnable
 import java.util.*
-import kotlin.collections.HashMap
 
 class Events(private val plugin: Plugin) : Listener {
-    val break_countlist: MutableMap<Location, Int> = HashMap() // ブロックごとに変数を保存する
+    val break_countlist: MutableMap<Location, Int> = mutableMapOf() // ブロックごとに変数を保存する
+
     // 下のブロックを管理するためのリスト
     val blockBelow1_list: MutableList<Material> = mutableListOf(Material.BEDROCK, Material.REDSTONE_BLOCK, Material.EMERALD_BLOCK)
 
@@ -34,14 +34,14 @@ class Events(private val plugin: Plugin) : Listener {
         val block = e.block
         val player = e.player
         val blockBelow = block.location.subtract(0.0, 1.0, 0.0).block
-        val checkblock = block.location.subtract(0.0, 2.0, 0.0).block
+        val checkblock = block.location.subtract(0.0, 2.0, 0.0).block.type == Material.OBSERVER
         val mainhand = player.inventory.itemInMainHand
         val damageable_setting: Int
 
         if (block.type != Material.EMERALD_ORE) {
             return
         }
-        if (checkblock.type != Material.OBSERVER) {
+        if (!checkblock) {
             return
         }
         e.isCancelled = true
@@ -51,6 +51,7 @@ class Events(private val plugin: Plugin) : Listener {
             NoHavePicaxe(player)
             return
         }
+        // 鉄のピッケル以外で壊した場合
         itemMeta.let {
             if (mainhand.type != Material.IRON_PICKAXE) {
                 NoHavePicaxe(player)
@@ -76,6 +77,80 @@ class Events(private val plugin: Plugin) : Listener {
         // 耐久値を減らす
         durabilityitem(mainhand, damageable_setting, player)
     }
+    @EventHandler
+    fun onPlayerInteractEvent(e: PlayerInteractEvent) {
+        // ブロックをクリックしたときの処理
+        val player = e.player
+        val block = e.clickedBlock
+        val checkblock = block?.location?.subtract(0.0, 2.0, 0.0)?.block?.type == Material.OBSERVER
+
+        // エメラルド鉱石以外なら処理しない
+        if (block?.type != Material.EMERALD_ORE) {
+            return
+        }
+        // 右クリックじゃなかったら処理しない
+        if (e.action != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK) {
+            return
+        }
+        if (!checkblock) {
+            return
+        }
+
+        // コマブロでクリックした場合 GIVE GUIを開く
+        if (player.inventory.itemInMainHand.type == Material.COMMAND_BLOCK) {
+            if (!player.isOp) {
+                return
+            }
+            e.isCancelled = true
+            // GUI作成
+            val giveGUI = Bukkit.createInventory(null, 9, ChatColor.DARK_AQUA.toString() + "パチンコピッケル")
+
+            for (i in 1..giveGUI.size) {
+                val item = ItemStack(Material.IRON_PICKAXE)
+                val itemMeta: ItemMeta? = item.itemMeta
+                itemMeta?.setDisplayName(ChatColor.YELLOW.toString() + i.toString() + "号機のピッケル")
+                item.setItemMeta(itemMeta)
+
+                giveGUI.setItem(i - 1, item)
+            }
+            // プレイヤーにGUIを表示します
+            player.openInventory(giveGUI)
+            return
+        }
+
+        // 連続のハズレ数を取得して titleに流す
+        val break_count = break_countlist[block.getLocation()] ?: 0
+        title(player, "", ChatColor.GOLD.toString() + "連続" + break_count.toString() + "回ハズレ")
+    }
+
+    @EventHandler
+    fun onInventoryClick(e: InventoryClickEvent) {
+        // GUIをクリックしたときのイベント
+        if (e.currentItem == null) {
+            return
+        }
+        if (e.view.title != ChatColor.DARK_AQUA.toString() + "パチンコピッケル") {
+            return
+        }
+        e.isCancelled = true
+
+        val click_item = e.currentItem?.type == Material.IRON_PICKAXE
+        if (!click_item) {
+            return
+        }
+        val click_number = e.slot // クリックしたスロットの番号取得
+        var command: String? = null
+        val player = e.whoClicked as Player
+
+        if (click_number == 0) {
+            command = "{display:{Name:\"{\\\"text\\\":\\\"採掘パチンコ(1号機)\\\",\\\"color\\\":\\\"gold\\\"}\",Lore:[\"採掘パチンコ用で使うピッケル\"]},CanDestroy:[\"minecraft:emerald_ore\"]}"
+        } else {
+            message(player, ChatColor.RED.toString() + "現在ピッケル登録されていません")
+        }
+        if (command != null) { Bukkit.dispatchCommand(player, "give @s iron_pickaxe" + command) }
+
+        player.closeInventory()
+    }
 
     fun Pachinko1(block: Block, blockBelow: Block, player: Player, e: BlockBreakEvent) {
         // パチンコ1号機の処理
@@ -88,14 +163,13 @@ class Events(private val plugin: Plugin) : Listener {
         val blockLocation = block.location
 
         if (block_type == Material.BEDROCK) { // 通常時
-
             // 確率
             val currentValue = break_countlist.getOrDefault(blockLocation, 0)
             break_countlist[blockLocation] = currentValue + 1
 
             // 抽選
-            val emerald_lottery = random.nextInt(120) == 1
-            val redstone_lottery = random.nextInt(60) == 1
+            val emerald_lottery = random.nextInt(120) == 0
+            val redstone_lottery = random.nextInt(60) == 0
 
             if (emerald_lottery) { // エメラルドブロックが当たったとき
                 staging(
@@ -129,7 +203,7 @@ class Events(private val plugin: Plugin) : Listener {
                 )
                 hit(player, block)
             } else { // レッドストーンブロックの処理
-                val redstone_ranodm = random.nextInt(2) == 1
+                val redstone_ranodm = random.nextInt(2) == 0
                 if (redstone_ranodm) {
                     // レッドストーンが1/2であったときの繰り返し処理
                     if (!redstone_ranodm) {
@@ -150,80 +224,9 @@ class Events(private val plugin: Plugin) : Listener {
         }
     }
 
-    @EventHandler
-    fun onPlayerInteractEvent(e: PlayerInteractEvent) {
-        // ブロックをクリックしたときの処理
-        val player = e.player
-        val block = e.clickedBlock
-        val checkblock = block?.location?.subtract(0.0, 2.0, 0.0)?.block
-
-        if (block?.type != Material.EMERALD_ORE) {
-            return
-        }
-        if (e.action == org.bukkit.event.block.Action.LEFT_CLICK_BLOCK) {
-            return
-        }
-        if (checkblock?.type != Material.OBSERVER) {
-            return
-        }
-
-        if (player.inventory.itemInMainHand.type == Material.COMMAND_BLOCK) {
-            if (!player.isOp) {
-                player.sendMessage(ChatColor.RED.toString() + "権限がありません")
-                return
-            }
-            e.isCancelled = true
-            // GUI作成
-            val inventory = Bukkit.createInventory(null, 9, ChatColor.DARK_AQUA.toString() + "パチンコピッケル")
-
-            for (i in 1..9) {
-                val item = ItemStack(Material.IRON_PICKAXE)
-                val itemMeta: ItemMeta? = item.itemMeta
-                itemMeta?.setDisplayName(ChatColor.YELLOW.toString() + i.toString() + "号機用")
-                item.setItemMeta(itemMeta)
-
-                inventory.setItem(i - 1, item)
-            }
-            // プレイヤーにGUIを表示します
-            player.openInventory(inventory)
-            return
-        }
-
-        val break_count = break_countlist[block.getLocation()] ?: 0
-        player.sendTitle("", ChatColor.GOLD.toString() + "連続" + break_count.toString() + "回ハズレ", 20, 20, 20)
-    }
-
-    @EventHandler
-    fun onInventoryClick(e: InventoryClickEvent) {
-        if (e.currentItem == null) {
-            return
-        }
-        if (e.view.title != ChatColor.DARK_AQUA.toString() + "パチンコピッケル") {
-            return
-        }
-        e.isCancelled = true
-
-        val click_item = e.currentItem
-        if (click_item?.type != Material.IRON_PICKAXE) {
-            return
-        }
-        val click_number = e.slot
-        var command: String? = null
-        val player = e.whoClicked as Player
-
-        if (click_number == 0) {
-            command = "give @s iron_pickaxe{display:{Name:\"{\\\"text\\\":\\\"採掘パチンコ(1号機)\\\",\\\"color\\\":\\\"gold\\\"}\",Lore:[\"採掘パチンコ用で使うピッケル\"]},CanDestroy:[\"minecraft:emerald_ore\"]}"
-        } else {
-            player.sendMessage(ChatColor.RED.toString() + "現在ピッケル登録されていません")
-        }
-        if (command != null) { Bukkit.dispatchCommand(player, command) }
-
-        player.closeInventory()
-    }
-
     fun NoHavePicaxe(player: Player) {
         // 専用ピッケルじゃないときの処理まとめ
-        player.sendMessage(ChatColor.RED.toString() + "専用ピッケルを購入してください")
+        message(player, ChatColor.RED.toString() + "専用ピッケルを購入してください")
     }
 
     fun hit(player: Player, block: Block) {
@@ -234,6 +237,7 @@ class Events(private val plugin: Plugin) : Listener {
             it.setDisplayName(ChatColor.GOLD.toString() + "ラッキーエメラルド")
             hit_emerald.setItemMeta(it)
 
+            // 連続ハズレをリセットする
             val blockLocation = block.location
             break_countlist[blockLocation] = 0
         }
@@ -243,6 +247,14 @@ class Events(private val plugin: Plugin) : Listener {
         player.playSound(player, Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 1.0f)
     }
 
+    fun message(player: Player, message: String) {
+        // player.sendMessageを テンプレート化
+        player.sendMessage(message)
+    }
+    fun title(player: Player, title: String, subtitle: String) {
+        // titleを テンプレート化
+        player.sendTitle(title, subtitle, 3, 20, 3)
+    }
     fun staging(title: String, subtitle: String, player: Player, block: Block, set_block: Material, sound: Sound?) {
         // 演出
         block.setType(Material.BEDROCK)
@@ -255,12 +267,12 @@ class Events(private val plugin: Plugin) : Listener {
 
             override fun run() {
                 if (count <= 10) {
-                    this.switching = if (switching == true) {
-                        player.sendTitle(title, ChatColor.GREEN.toString() + subtitle, 3, 3, 3)
+                    this.switching = if (switching) {
+                        title(player, title, ChatColor.GREEN.toString() + subtitle)
                         blockBelow.setType(set_block)
                         false
                     } else {
-                        player.sendTitle(ChatColor.YELLOW.toString() + title, subtitle, 3, 3, 3)
+                        title(player, ChatColor.YELLOW.toString() + title, subtitle)
                         blockBelow.setType(Material.BEDROCK)
                         true
                     }
@@ -287,7 +299,7 @@ class Events(private val plugin: Plugin) : Listener {
             if (durability >= 250) { // 耐久値が0になったらアイテムを消す
                 mainhand.setAmount(0)
                 player.playSound(player.location, Sound.ENTITY_ITEM_BREAK, 1f, 1f)
-                player.sendMessage(ChatColor.RED.toString() + "ピッケルが壊れた")
+                message(player, ChatColor.RED.toString() + "ピッケルが壊れた")
                 return
             }
             damageable.damage = durability.toInt()

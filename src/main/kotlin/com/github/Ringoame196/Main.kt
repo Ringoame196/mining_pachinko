@@ -1,5 +1,6 @@
 package com.github.Ringoame196
 
+import com.github.Ringoame196.Listeners.Events
 import org.bukkit.plugin.java.JavaPlugin
 
 class Main : JavaPlugin() {
